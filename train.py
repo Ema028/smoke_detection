@@ -21,6 +21,8 @@ data.box_plot_multi(colunas_outliers, "Distribuição de Outliers")
 data.apply_log(colunas_outliers) #faz sentido para cauda muito longa, muitos outliers e regressão logística como baseline
 data.box_plot_multi(colunas_outliers, "Em Escala Logarítmica")
 
+#restrições específicas nos nomes das features do xgboost
+data.df.columns = data.df.columns.str.replace(r'[\[\]]', '', regex=True)
 data.separar_base('Fire Alarm', columns=['Fire Alarm', 'UTC', 'CNT']) #removidas coluna de contagem de tempo e amostras pq modelo estava usando de gabarito
 verificar_base(data.X_train, data.X_test, data.y_train, data.y_test, 'Fire Alarm')
 
@@ -54,9 +56,19 @@ previsoes = log_reg.predict(data.X_test)
 print(f"\nAcurácia da regressão logistica: {accuracy_score(data.y_test, previsoes) * 100:.2f}%\n")
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, previsoes)}")
 
-#restrições específicas nos nomes das features do xgboost
-data.X_train.columns = data.X_train.columns.str.replace(r'[\[\]]', '', regex=True)
-data.X_test.columns = data.X_test.columns.str.replace(r'[\[\]]', '', regex=True)
+#tirando colunas redundantes e testando regressão, ver impacto de reduzir multicolinearidade
+colunas_redundantes = ['PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5']
+X_train_reduzido = data.X_train.drop(columns=colunas_redundantes)
+X_test_reduzido = data.X_test.drop(columns=colunas_redundantes)
+
+log_reg_red = Pipeline([('smote', SMOTE(random_state=42)),
+                        ('transformer', QuantileTransformer(output_distribution='normal', random_state=42)),
+                        ('model', LogisticRegression(max_iter=1000))])
+
+log_reg_red.fit(X_train_reduzido, data.y_train)
+prev_red = log_reg_red.predict(X_test_reduzido)
+print(f"\nAcurácia da regressão logistica reduzida: {accuracy_score(data.y_test, prev_red) * 100:.2f}%\n")
+print(f"Relatório de Classificação:\n{classification_report(data.y_test, prev_red)}")
 
 xgb = Pipeline([('smote', SMOTE(random_state=42)),
                 ('model', XGBClassifier(random_state=0))])
