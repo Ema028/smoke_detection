@@ -131,7 +131,7 @@ data.feature_importance(xgb.named_steps['model'], colunas=data.X_test.columns)
 simpleimputer faz conversão implícita pra float mudou levemente cálculo do smote,
 o que causou flutuação na feature importance, TVOCppb e a PressurehPa inverteram no ranking,
 empate técnico na capacidade preditiva desses sensores
-pequena oscilação nos alarmes falsos é um trade-off aceito para garantir que o pipeline não crashe na api 
+pequena oscilação nos alarmes falsos é um trade-off aceito para garantir que o pipeline não crashe na app 
 caso tenha quedas de sensores no deploy
 Feature      Importancia (%) ->novos valores
 PressurehPa  34.63%
@@ -145,7 +145,7 @@ colunas_top3 = ['TVOCppb', 'PressurehPa', 'PM1.0']
 X_train_reduzido = data.X_train[colunas_top3]
 X_test_reduzido = data.X_test[colunas_top3]
 
-xgb_reduzido = Pipeline([('imputer', SimpleImputer(strategy='median')), #tratar nulos q a api receber(não crashar)
+xgb_reduzido = Pipeline([('imputer', SimpleImputer(strategy='median')), #tratar nulos q a app receber(não crashar)
                          ('smote', SMOTE(random_state=0)), #só roda no .fit()
                          ('model', XGBClassifier(random_state=0))])
 
@@ -157,7 +157,7 @@ xgb_reduzido.fit(X_train_reduzido, data.y_train)
 y_pred_reduzido = xgb_reduzido.predict(X_test_reduzido)
 prob = xgb_reduzido.predict_proba(X_test_reduzido)
 auc_roc(data.y_test, prob)
-df_resultados = pd.DataFrame({'Previsão': previsoes,
+df_resultados = pd.DataFrame({'Previsão': prob,
                               'Probabilidade Incêndio': np.round(prob[:, 1] * 100, decimals= 2)})
 print(df_resultados.head())
 '''atinge 99, 100% de probabilidade, daria para usar CalibratedClassifierCV para calibrar probabilidades entre 60 e 80
