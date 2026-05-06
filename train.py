@@ -64,14 +64,20 @@ print(f"Média dos 5 folds: {cv_log.mean() * 100:.2f}%")
 previsoes = log_reg.predict(data.X_test)
 print(f"\nAcurácia da regressão logistica: {accuracy_score(data.y_test, previsoes) * 100:.2f}%\n")
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, previsoes)}")
+conf_matrix(data.y_test, previsoes, ['Não Incêndio', 'Incêndio'])
 
 #tirando colunas redundantes e testando regressão, ver impacto de reduzir multicolinearidade
 colunas_redundantes = ['PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5']
+colunas_outliers = ['TVOCppb', 'eCO2ppm']
+
 X_train_reduzido = data.X_train.drop(columns=colunas_redundantes)
 X_test_reduzido = data.X_test.drop(columns=colunas_redundantes)
 
-log_reg_red = Pipeline([('smote', SMOTE(random_state=42)),
-                        ('transformer', QuantileTransformer(output_distribution='normal', random_state=42)),
+preprocessor = ColumnTransformer([('outliers', QuantileTransformer(output_distribution='normal', random_state=42), colunas_outliers),
+                                  ('normais', StandardScaler(), colunas_normais)])
+
+log_reg_red = Pipeline([('preprocessor', preprocessor),
+                        ('smote', SMOTE(random_state=42)),
                         ('model', LogisticRegression(max_iter=1000))])
 
 log_reg_red.fit(X_train_reduzido, data.y_train)
@@ -90,7 +96,10 @@ print(classification_report(data.y_train, pred_treino))
 y_pred = xgb.predict(data.X_test)
 print(f"Acurácia de xgboost: {accuracy_score(data.y_test, y_pred) * 100:.2f}%\n")
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, y_pred)}")
-
+'''
+a hipótese linear atingiu um bom baseline de 90% de recall(considerando que falsos negativos são críticos em detecção de incêndio) 
+após o pré-processamento otimizado, mas provou que 10% dos incêndios reais não conseguem ser explicados só com relações lineares
+'''
 
 param_grid = {'model__learning_rate': [0.05, 0.1, 0.2], 'model__max_depth': [4, 5, 6],
               'model__n_estimators': [100, 200, 300], 'model__subsample': [0.8, 0.9, 1.0],
@@ -109,6 +118,7 @@ print(f"\nMelhores Hiperparâmetros: {random_search.best_params_}\n")
 y_pred_rs = melhor_modelo.predict(data.X_test)
 print(f"Acurácia do melhor modelo nos dados de teste: {accuracy_score(data.y_test, y_pred_rs) * 100:.2f}%\n")
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, y_pred_rs)}")
+conf_matrix(data.y_test, y_pred_rs, ['Não Incêndio', 'Incêndio'])
 
 data.feature_importance(xgb.named_steps['model'], colunas=data.X_test.columns)
 #3 sensores são responsáveis por 94,85% da capacidade preditiva do modelo
@@ -126,5 +136,20 @@ print(f"Média dos 5 folds: {cv_rf_reduzido.mean() * 100:.2f}%\n")
 
 xgb_reduzido.fit(X_train_reduzido, data.y_train)
 y_pred_reduzido = xgb_reduzido.predict(X_test_reduzido)
+prob = xgb_reduzido.predict_proba(X_test_reduzido)
+auc_roc(data.y_test, prob)
+df_resultados = pd.DataFrame({'Previsão': previsoes,
+                              'Probabilidade Incêndio': np.round(prob[:, 1] * 100, decimals= 2)})
+print(df_resultados.head())
+
+plt.figure(figsize=(12, 8))
+sns.histplot(df_resultados['Probabilidade Incêndio'], bins=30)
+plt.title('Distribuição de Probabilidades de Incêndio')
+plt.show()
+conf_matrix(data.y_test, y_pred_reduzido, ['Não Incêndio', 'Incêndio'])
 print(f"Acurácia do modelo reduzido: {accuracy_score(data.y_test, y_pred_reduzido) * 100:.2f}%\n")
 print(f"Relatório de Classificação do modelo reduzido:\n{classification_report(data.y_test, y_pred_reduzido)}")
+'''
+com só 3 sensores o desempenho se manteve, cravou 100% de Recall para incêndios e 99.74% de acurácia global,
+viabilizando a produção e eliminando o custo de hardware excedente
+'''
