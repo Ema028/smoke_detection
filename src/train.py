@@ -7,9 +7,11 @@ from utils.pre_processing import *
 from sklearn.model_selection import RandomizedSearchCV
 from imblearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 import joblib
+import os
 
-df = pd.read_csv("data/smoke_detection.csv", delimiter=',')
+df = pd.read_csv("../data/smoke_detection.csv", delimiter=',')
 data = Dataframe(df)
 #restrições específicas nos nomes das features do xgboost
 data.df.columns = data.df.columns.str.replace(r'[\[\]]', '', regex=True)
@@ -108,6 +110,7 @@ param_grid = {'model__learning_rate': [0.05, 0.1, 0.2], 'model__max_depth': [4, 
 
 xgb_base = Pipeline([('smote', SMOTE(random_state=42)),
                      ('model', XGBClassifier(random_state=0))])
+
 #50 combinações aleatórias, 5 folds de validação cruzada
 random_search = RandomizedSearchCV(estimator=xgb_base, param_distributions=param_grid,
                                    n_iter=50, cv=5, verbose=2, random_state=42, n_jobs=-1)
@@ -116,21 +119,36 @@ random_search.fit(data.X_train, data.y_train)
 melhor_modelo = random_search.best_estimator_
 print(f"\nMelhores Hiperparâmetros: {random_search.best_params_}\n")
 
-y_pred_rs = melhor_modelo.predict(data.X_test)
-print(f"Acurácia do melhor modelo nos dados de teste: {accuracy_score(data.y_test, y_pred_rs) * 100:.2f}%\n")
-print(f"Relatório de Classificação:\n{classification_report(data.y_test, y_pred_rs)}")
-conf_matrix(data.y_test, y_pred_rs, ['Não Incêndio', 'Incêndio'])
+pred_rs = melhor_modelo.predict(data.X_test)
+print(f"Acurácia do melhor modelo nos dados de teste: {accuracy_score(data.y_test, pred_rs) * 100:.2f}%\n")
+print(f"Relatório de Classificação:\n{classification_report(data.y_test, pred_rs)}")
+conf_matrix(data.y_test, pred_rs, ['Não Incêndio', 'Incêndio'])
 
 data.feature_importance(xgb.named_steps['model'], colunas=data.X_test.columns)
 #3 sensores são responsáveis por 94,85% da capacidade preditiva do modelo
 #(TVOCppb-35.20%, PressurehPa-33.72% e PM1.0-25.93%) (com TemperatureC-2.36% e Raw Ethanol-2.06% chega a 99,27%)
+'''
+simpleimputer faz conversão implícita pra float mudou levemente cálculo do smote,
+o que causou flutuação na feature importance, TVOCppb e a PressurehPa inverteram no ranking,
+empate técnico na capacidade preditiva desses sensores
+pequena oscilação nos alarmes falsos é um trade-off aceito para garantir que o pipeline não crashe na api 
+caso tenha quedas de sensores no deploy
+Feature      Importancia (%) ->novos valores
+PressurehPa  34.63%
+TVOCppb      33.69%
+PM1.0        26.41%
+TemperatureC 2.58%
+Raw Ethanol  2.07%
+'''
 
 colunas_top3 = ['TVOCppb', 'PressurehPa', 'PM1.0']
 X_train_reduzido = data.X_train[colunas_top3]
 X_test_reduzido = data.X_test[colunas_top3]
 
-xgb_reduzido = Pipeline([('smote', SMOTE(random_state=0)),
+xgb_reduzido = Pipeline([('imputer', SimpleImputer(strategy='median')), #tratar nulos q a api receber(não crashar)
+                         ('smote', SMOTE(random_state=0)), #só roda no .fit()
                          ('model', XGBClassifier(random_state=0))])
+
 cv_rf_reduzido = cross_val_score(xgb_reduzido, X_train_reduzido, data.y_train, cv=5)
 print(f"Scores individuais por Fold: {np.round(cv_rf_reduzido * 100, 2)}%")
 print(f"Média dos 5 folds: {cv_rf_reduzido.mean() * 100:.2f}%\n")
@@ -143,7 +161,7 @@ df_resultados = pd.DataFrame({'Previsão': previsoes,
                               'Probabilidade Incêndio': np.round(prob[:, 1] * 100, decimals= 2)})
 print(df_resultados.head())
 '''atinge 99, 100% de probabilidade, daria para usar CalibratedClassifierCV para calibrar probabilidades entre 60 e 80
-e entre 10 e 20, mas considerando acurácia de 99,74 e recall de 100%, ganho seria mínimo comparado ao aumento de complexidade,
+e entre 10 e 20, mas considerando acurácia de 99,70% e recall de 100%, ganho seria mínimo comparado ao aumento de complexidade,
 o que iria contra a ideia de criar um sistema leve para deploy em dispositivos iot'''
 
 plt.figure(figsize=(12, 8))
@@ -154,8 +172,8 @@ conf_matrix(data.y_test, y_pred_reduzido, ['Não Incêndio', 'Incêndio'])
 print(f"Acurácia do modelo reduzido: {accuracy_score(data.y_test, y_pred_reduzido) * 100:.2f}%\n")
 print(f"Relatório de Classificação do modelo reduzido:\n{classification_report(data.y_test, y_pred_reduzido)}")
 '''
-com só 3 sensores o desempenho se manteve, cravou 100% de Recall para incêndios e 99.74% de acurácia global,
+com só 3 sensores o desempenho se manteve, cravou 100% de Recall para incêndios e 99.70% de acurácia global,
 viabilizando a produção e eliminando o custo de hardware excedente
 '''
-joblib.dump(xgb_reduzido, "models/xgb_reduzido.pkl")
-joblib.dump(melhor_modelo, "models/melhor_modelo.pkl")
+os.makedirs("models", exist_ok=True)
+joblib.dump(xgb_reduzido, "../models/xgb_reduzido.pkl")
