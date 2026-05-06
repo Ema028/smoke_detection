@@ -6,9 +6,12 @@ from sklearn.model_selection import cross_val_score
 from utils.pre_processing import *
 from sklearn.model_selection import RandomizedSearchCV
 from imblearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 
 df = pd.read_csv("data/smoke_detection.csv", delimiter=',')
 data = Dataframe(df)
+#restrições específicas nos nomes das features do xgboost
+data.df.columns = data.df.columns.str.replace(r'[\[\]]', '', regex=True)
 print(data.df.info()) #só variáveis numéricas
 data.print_missing() #nada faltando
 data.drop_columns(['Unnamed: 0']) #desconsiderando indice da linha
@@ -16,7 +19,7 @@ data.drop_columns(['Unnamed: 0']) #desconsiderando indice da linha
 pd.set_option('display.float_format', lambda x: f'{x:.2f}')
 print(data.df.describe().T)
 #sinais de outliers nas colunas:
-colunas_outliers = ['TVOC[ppb]', 'eCO2[ppm]', 'PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5']
+colunas_outliers = ['TVOCppb', 'eCO2ppm', 'PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5']
 data.box_plot_multi(colunas_outliers, "Distribuição de Outliers")
 '''
 transformação logarítmica testada para preprocessamento antes de regressão logarítmica, 
@@ -25,8 +28,6 @@ por isso log+stdscaler foi substituido por quantiletransformer no pipeline
 data.apply_log(colunas_outliers)
 data.box_plot_multi(colunas_outliers, "Em Escala Logarítmica")'''
 
-#restrições específicas nos nomes das features do xgboost
-data.df.columns = data.df.columns.str.replace(r'[\[\]]', '', regex=True)
 data.separar_base('Fire Alarm', columns=['Fire Alarm', 'UTC', 'CNT']) #removidas coluna de contagem de tempo e amostras pq modelo estava usando de gabarito
 verificar_base(data.X_train, data.X_test, data.y_train, data.y_test, 'Fire Alarm')
 
@@ -41,9 +42,13 @@ xgboost como modelo principal para mapear picos não-lineares na detecção de f
 lida nativamente com escalas heterogêneas, anula o impacto da multicolinearidade e fornece a 
 importância das variáveis, usado para isolar apenas os sensores úteis na versão final
 """
-log_reg = Pipeline([('smote', SMOTE(random_state=42)),
-                    #forçar distribuição linear por causa dos outliers
-                    ('transformer', QuantileTransformer(output_distribution='normal', random_state=42)),
+colunas_normais = [col for col in data.X_train.columns if col not in colunas_outliers]
+
+preprocessor = ColumnTransformer([('outliers', QuantileTransformer(output_distribution='normal', random_state=42), colunas_outliers),
+                                  ('normais', StandardScaler(), colunas_normais)])
+
+log_reg = Pipeline([('preprocessor', preprocessor),
+                    ('smote', SMOTE(random_state=42)),
                     ('model', LogisticRegression(max_iter=1000))])
 
 log_reg.fit(data.X_train, data.y_train)
