@@ -7,6 +7,7 @@ from utils.pre_processing import *
 from sklearn.model_selection import RandomizedSearchCV
 from imblearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
+import joblib
 
 df = pd.read_csv("data/smoke_detection.csv", delimiter=',')
 data = Dataframe(df)
@@ -141,6 +142,9 @@ auc_roc(data.y_test, prob)
 df_resultados = pd.DataFrame({'Previsão': previsoes,
                               'Probabilidade Incêndio': np.round(prob[:, 1] * 100, decimals= 2)})
 print(df_resultados.head())
+'''atinge 99, 100% de probabilidade, daria para usar CalibratedClassifierCV para calibrar probabilidades entre 60 e 80
+e entre 10 e 20, mas considerando acurácia de 99,74 e recall de 100%, ganho seria mínimo comparado ao aumento de complexidade,
+o que iria contra a ideia de criar um sistema leve para deploy em dispositivos iot'''
 
 plt.figure(figsize=(12, 8))
 sns.histplot(df_resultados['Probabilidade Incêndio'], bins=30)
@@ -153,3 +157,5 @@ print(f"Relatório de Classificação do modelo reduzido:\n{classification_repor
 com só 3 sensores o desempenho se manteve, cravou 100% de Recall para incêndios e 99.74% de acurácia global,
 viabilizando a produção e eliminando o custo de hardware excedente
 '''
+joblib.dump(xgb_reduzido, "models/xgb_reduzido.pkl")
+joblib.dump(melhor_modelo, "models/melhor_modelo.pkl")
