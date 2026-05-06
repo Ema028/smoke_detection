@@ -18,8 +18,12 @@ print(data.df.describe().T)
 #sinais de outliers nas colunas:
 colunas_outliers = ['TVOC[ppb]', 'eCO2[ppm]', 'PM1.0', 'PM2.5', 'NC0.5', 'NC1.0', 'NC2.5']
 data.box_plot_multi(colunas_outliers, "Distribuição de Outliers")
-data.apply_log(colunas_outliers) #faz sentido para cauda muito longa, muitos outliers e regressão logística como baseline
-data.box_plot_multi(colunas_outliers, "Em Escala Logarítmica")
+'''
+transformação logarítmica testada para preprocessamento antes de regressão logarítmica, 
+mas não foi suficiente, muita assimetria e caudas muito longas nos sensores
+por isso log+stdscaler foi substituido por quantiletransformer no pipeline
+data.apply_log(colunas_outliers)
+data.box_plot_multi(colunas_outliers, "Em Escala Logarítmica")'''
 
 #restrições específicas nos nomes das features do xgboost
 data.df.columns = data.df.columns.str.replace(r'[\[\]]', '', regex=True)
@@ -83,8 +87,9 @@ print(f"Acurácia de xgboost: {accuracy_score(data.y_test, y_pred) * 100:.2f}%\n
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, y_pred)}")
 
 
-param_grid = {'model__learning_rate': [0.01, 0.05, 0.1, 0.2], 'model__max_depth': [3, 4, 5, 6],
-              'model__n_estimators': [50, 100, 200, 300], 'model__subsample': [0.8, 0.9, 1.0], 'model__colsample_bytree': [0.8, 0.9, 1.0]}
+param_grid = {'model__learning_rate': [0.05, 0.1, 0.2], 'model__max_depth': [4, 5, 6],
+              'model__n_estimators': [100, 200, 300], 'model__subsample': [0.8, 0.9, 1.0],
+              'model__colsample_bytree': [0.8, 0.9, 1.0]}
 
 xgb_base = Pipeline([('smote', SMOTE(random_state=42)),
                      ('model', XGBClassifier(random_state=0))])
@@ -100,9 +105,11 @@ y_pred_rs = melhor_modelo.predict(data.X_test)
 print(f"Acurácia do melhor modelo nos dados de teste: {accuracy_score(data.y_test, y_pred_rs) * 100:.2f}%\n")
 print(f"Relatório de Classificação:\n{classification_report(data.y_test, y_pred_rs)}")
 
-colunas_top3 = data.X_train.columns[xgb.named_steps['model'].feature_importances_.argsort()[-3:]]
+data.feature_importance(xgb.named_steps['model'], colunas=data.X_test.columns)
+#3 sensores são responsáveis por 94,85% da capacidade preditiva do modelo
+#(TVOCppb-35.20%, PressurehPa-33.72% e PM1.0-25.93%) (com TemperatureC-2.36% e Raw Ethanol-2.06% chega a 99,27%)
 
-print(f"Sensores mantidos no modelo reduzido: {list(colunas_top3)}\n")
+colunas_top3 = ['TVOCppb', 'PressurehPa', 'PM1.0']
 X_train_reduzido = data.X_train[colunas_top3]
 X_test_reduzido = data.X_test[colunas_top3]
 
