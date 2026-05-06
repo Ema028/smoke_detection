@@ -4,8 +4,7 @@ from pydantic import BaseModel, Field
 
 app = FastAPI(title="Smoke Detection IoT",
               description="API para detecção de incêndio usando XGBoost",
-              version="1.0.0",
-              docs_url="/")
+              version="1.0.0")
 
 class LeituraSensor(BaseModel):
     TVOCppb: float
@@ -13,7 +12,7 @@ class LeituraSensor(BaseModel):
     #python não permite variáveis com ponto, mas json aceita como chave
     PM1_0: float = Field(alias="PM1.0")
 
-@app.get("/home")
+@app.get("/")
 def home():
     return {"message": "Detector de Incêndio"}
 

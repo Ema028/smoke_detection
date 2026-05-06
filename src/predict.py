@@ -1,7 +1,11 @@
 import joblib
 import pandas as pd
+from pathlib import Path
 
-modelo = joblib.load("models/xgb_reduzido.pkl")
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "models" / "xgb_reduzido.pkl"
+
+modelo = joblib.load(MODEL_PATH)
 
 def predict(data_dict):
     #assume chegada de dados só com as 3 colunas do modelo reduzido

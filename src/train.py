@@ -8,8 +8,14 @@ from sklearn.model_selection import RandomizedSearchCV
 from imblearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+from pathlib import Path
 import joblib
-import os
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_PATH = BASE_DIR / "models" / "xgb_reduzido.pkl"
+
+MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 
 df = pd.read_csv("../data/smoke_detection.csv", delimiter=',')
 data = Dataframe(df)
@@ -175,5 +181,5 @@ print(f"Relatório de Classificação do modelo reduzido:\n{classification_repor
 com só 3 sensores o desempenho se manteve, cravou 100% de Recall para incêndios e 99.70% de acurácia global,
 viabilizando a produção e eliminando o custo de hardware excedente
 '''
-os.makedirs("models", exist_ok=True)
-joblib.dump(xgb_reduzido, "../models/xgb_reduzido.pkl")
+
+joblib.dump(xgb_reduzido, MODEL_PATH)
