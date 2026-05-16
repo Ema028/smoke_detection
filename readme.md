@@ -6,14 +6,15 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688)
 ![Status](https://img.shields.io/badge/status-production--ready-brightgreen)
 
-Sistema de detecção de incêndio otimizado para sensores ambientais IoT. 
-O projeto diminui a dependência de hardware de 12 para apenas 3 sensores, 
-cortando custos drasticamente, enquanto mantém um desempenho de 99.7% de acurácia e 100% de recall com deploy via API REST em FastAPI.
-
+Sistema de detecção de fumaça otimizado para sensores ambientais IoT. 
+O projeto reduz a dependência de hardware de 12 para apenas 3 variáveis ambientais utilizando técnicas de Machine Learning, 
+mantendo 99.7% de acurácia e 100% de recall. 
+A inferência do modelo é disponibilizada através de uma API REST construída com FastAPI.
 ---
 ## 🚀 Demo
 
 ![Demo da API](graficos/demo.gif)
+🔗 [Acessar aplicação](https://smoke-detection-1.onrender.com/docs)
 
 ---
 ## 🧠 Arquitetura e Modelagem
@@ -102,13 +103,11 @@ POST /predict
 ### Curl
 
 ```bash
-curl -X POST "http://127.0.0.1:8000/predict" \
--H "Content-Type: application/json" \
--d '{
+{
   "TVOCppb": 1200,
   "PressurehPa": 938.5,
   "PM1.0": 10.5
-}'
+}
 ```
 
 ### Resposta
